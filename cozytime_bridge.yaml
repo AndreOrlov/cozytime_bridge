@@ -32,22 +32,73 @@ wifi:
     ssid: "Cozytime Bridge Fallback Hotspot"
     password: "REDACTED_AP_PASSWORD"
 
-# BLE сканер
+globals:
+  - id: cozytime_temp
+    type: float
+    initial_value: "0.0"
+  - id: cozytime_humid
+    type: float
+    initial_value: "0.0"
+  - id: cozytime_rssi_value
+    type: int8_t
+    initial_value: "0"
+
+# ============================================
+# BLE СКАНЕР
+# ============================================
 esp32_ble_tracker:
   scan_parameters:
     interval: 1.1s
     window: 1.1s
     active: false
+  on_ble_advertise:
+    - lambda: |-
+        // Парсер CozyTime прямо в lambda!
+        // Ищем manufacturer data с ID 0x51C9
 
-# Кастомный компонент для парсинга
-custom_component:
-  - lambda: |-
-      auto cozytime = new CozytimeParser();
-      App.register_component(cozytime);
-      return {cozytime};
+        for (auto &mfg_data : x.get_manufacturer_datas()) {
+          // Проверяем Manufacturer ID (0x51C9)
+          if (mfg_data.uuid == esphome::esp32_ble_tracker::ESPBTUUID::from_uint16(0x51C9)) {
+            // Нашли CozyTime!
+            const auto& data = mfg_data.data;
+
+            if (data.size() < 16) {
+              ESP_LOGV("cozytime", "Data too short: %d bytes", data.size());
+              return;
+            }
+
+            // Проверяем фиксированный префикс CECD6CCE
+            if (data[2] != 0xCE || data[3] != 0xCD || data[4] != 0x6C || data[5] != 0xCE) {
+              ESP_LOGV("cozytime", "Wrong device prefix");
+              return;
+            }
+
+            // Переменные данные начинаются с индекса 6
+            uint8_t temp_byte = data[6 + 3];   // byte[3] переменной части
+            uint8_t humid_byte = data[6 + 4];  // byte[4] переменной части
+
+            // Вычисляем значения по формуле
+            float temperature = (temp_byte + 42) / 10.0f;
+            float humidity = humid_byte - 6;
+
+            // Логируем
+            ESP_LOGI("cozytime",
+                     "CozyTime: T_byte=0x%02X (dec %d), H_byte=0x%02X (dec %d) → "
+                     "T=%.1f°C, H=%.0f%%, RSSI=%d dBm",
+                     temp_byte, temp_byte, humid_byte, humid_byte,
+                     temperature, humidity, x.get_rssi());
+
+            // Сохраняем в глобальные переменные
+            id(cozytime_temp) = temperature;
+            id(cozytime_humid) = humidity;
+            id(cozytime_rssi_value) = x.get_rssi();
+
+            return;
+          }
+        }
 
 sensor:
-  # Температура от первого найденного датчика CozyTime
+  # Температура
   - platform: template
     id: cozytime_temperature
     name: "CozyTime Temperature"
@@ -56,13 +107,9 @@ sensor:
     accuracy_decimals: 1
     update_interval: 5s
     lambda: |-
-      auto cozytime = (CozytimeParser*)App.get_component("cozytime_parser");
-      if (cozytime != nullptr && cozytime->has_valid_data()) {
-        return cozytime->get_temperature();
-      }
-      return NAN;
+      return id(cozytime_temp);
 
-  # Влажность от первого найденного датчика CozyTime
+  # Влажность
   - platform: template
     id: cozytime_humidity
     name: "CozyTime Humidity"
@@ -71,13 +118,9 @@ sensor:
     accuracy_decimals: 0
     update_interval: 5s
     lambda: |-
-      auto cozytime = (CozytimeParser*)App.get_component("cozytime_parser");
-      if (cozytime != nullptr && cozytime->has_valid_data()) {
-        return cozytime->get_humidity();
-      }
-      return NAN;
+      return id(cozytime_humid);
 
-# Опционально: RSSI (уровень сигнала)
+  # RSSI (уровень сигнала)
   - platform: template
     id: cozytime_rssi
     name: "CozyTime RSSI"
@@ -86,11 +129,7 @@ sensor:
     accuracy_decimals: 0
     update_interval: 5s
     lambda: |-
-      auto cozytime = (CozytimeParser*)App.get_component("cozytime_parser");
-      if (cozytime != nullptr && cozytime->has_valid_data()) {
-        return cozytime->get_rssi();
-      }
-      return NAN;
+      return id(cozytime_rssi_value);
 
   - platform: template
     name: "CozyTime Test Counter"
