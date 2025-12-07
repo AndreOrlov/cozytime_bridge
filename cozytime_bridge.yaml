@@ -1,0 +1,105 @@
+esphome:
+  name: cozytime-bridge
+  includes:
+    - cozytime_parser.h
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+  level: DEBUG
+  logs:
+    cozytime_parser: DEBUG
+
+# Enable Home Assistant API (УЖЕ БЕЗ password)
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: "REDACTED_OTA_PASSWORD"
+
+wifi:
+  ssid: "REDACTED_WIFI_SSID"
+  password: "REDACTED_WIFI_PASSWORD"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Cozytime Bridge Fallback Hotspot"
+    password: "REDACTED_AP_PASSWORD"
+
+# BLE сканер
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 1.1s
+    window: 1.1s
+    active: false
+
+# Кастомный компонент для парсинга
+custom_component:
+  - lambda: |-
+      auto cozytime = new CozytimeParser();
+      App.register_component(cozytime);
+      return {cozytime};
+
+sensor:
+  # Температура от первого найденного датчика CozyTime
+  - platform: template
+    id: cozytime_temperature
+    name: "CozyTime Temperature"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    update_interval: 5s
+    lambda: |-
+      auto cozytime = (CozytimeParser*)App.get_component("cozytime_parser");
+      if (cozytime != nullptr && cozytime->has_valid_data()) {
+        return cozytime->get_temperature();
+      }
+      return NAN;
+
+  # Влажность от первого найденного датчика CozyTime
+  - platform: template
+    id: cozytime_humidity
+    name: "CozyTime Humidity"
+    unit_of_measurement: "%"
+    device_class: humidity
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      auto cozytime = (CozytimeParser*)App.get_component("cozytime_parser");
+      if (cozytime != nullptr && cozytime->has_valid_data()) {
+        return cozytime->get_humidity();
+      }
+      return NAN;
+
+# Опционально: RSSI (уровень сигнала)
+  - platform: template
+    id: cozytime_rssi
+    name: "CozyTime RSSI"
+    unit_of_measurement: "dBm"
+    icon: "mdi:wifi"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      auto cozytime = (CozytimeParser*)App.get_component("cozytime_parser");
+      if (cozytime != nullptr && cozytime->has_valid_data()) {
+        return cozytime->get_rssi();
+      }
+      return NAN;
+
+  - platform: template
+    name: "CozyTime Test Counter"
+    id: cozytime_test_counter
+    unit_of_measurement: "cnt"
+    update_interval: 5s
+    lambda: |-
+      static int value = 0;
+      value += 1;
+      return value;
+
+captive_portal:
