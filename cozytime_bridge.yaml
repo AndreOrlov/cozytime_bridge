@@ -12,7 +12,8 @@ esp32:
 logger:
   level: DEBUG
   logs:
-    cozytime_parser: DEBUG
+    cozytime: INFO
+    esp32_ble_tracker: INFO
 
 # Enable Home Assistant API (УЖЕ БЕЗ password)
 api:
@@ -42,55 +43,54 @@ globals:
   - id: cozytime_rssi_value
     type: int8_t
     initial_value: "0"
+  - id: cozytime_battery
+    type: int
+    initial_value: "0"
 
 # ============================================
 # BLE СКАНЕР
 # ============================================
 esp32_ble_tracker:
   scan_parameters:
-    interval: 1.1s
-    window: 1.1s
-    active: false
+    interval: 30s      # Сканировать каждые 30 секунд
+    window: 1.1s       # Длительность окна сканирования
+    active: true
   on_ble_advertise:
     - lambda: |-
-        // Парсер CozyTime прямо в lambda!
-        // Ищем manufacturer data с ID 0x51C9
+        // Парсер CozyTime
+        // Проверяем ВСЕ manufacturer data на префикс CECD6CCE
 
         for (auto &mfg_data : x.get_manufacturer_datas()) {
-          // Проверяем Manufacturer ID (0x51C9)
-          if (mfg_data.uuid == esphome::esp32_ble_tracker::ESPBTUUID::from_uint16(0x51C9)) {
+          const auto& data = mfg_data.data;
+
+          // Проверяем минимальный размер
+          if (data.size() < 14) {
+            continue;
+          }
+
+          // Проверяем фиксированный префикс CECD6CCE (первые 4 байта)
+          if (data[0] == 0xCE && data[1] == 0xCD && data[2] == 0x6C && data[3] == 0xCE) {
             // Нашли CozyTime!
-            const auto& data = mfg_data.data;
 
-            if (data.size() < 16) {
-              ESP_LOGV("cozytime", "Data too short: %d bytes", data.size());
-              return;
-            }
-
-            // Проверяем фиксированный префикс CECD6CCE
-            if (data[2] != 0xCE || data[3] != 0xCD || data[4] != 0x6C || data[5] != 0xCE) {
-              ESP_LOGV("cozytime", "Wrong device prefix");
-              return;
-            }
-
-            // Переменные данные начинаются с индекса 6
-            uint8_t temp_byte = data[6 + 3];   // byte[3] переменной части
-            uint8_t humid_byte = data[6 + 4];  // byte[4] переменной части
-
+            // Переменные данные
+            uint8_t temp_byte = data[5];    // byte[5] для температуры
+            uint8_t humid_byte = data[7];   // byte[7] для влажности
+            uint8_t battery_byte = data[8]; // byte[8] для заряда батареи (91-92%)
+            
             // Вычисляем значения по формуле
-            float temperature = (temp_byte + 42) / 10.0f;
-            float humidity = humid_byte - 6;
+            float temperature = temp_byte / 5.0;  // 112 / 5 = 22.4°C
+            float humidity = humid_byte;          // 42 = 42%
+            int battery = battery_byte;           // 91 = 91%
 
             // Логируем
             ESP_LOGI("cozytime",
-                     "CozyTime: T_byte=0x%02X (dec %d), H_byte=0x%02X (dec %d) → "
-                     "T=%.1f°C, H=%.0f%%, RSSI=%d dBm",
-                     temp_byte, temp_byte, humid_byte, humid_byte,
-                     temperature, humidity, x.get_rssi());
+                     "CozyTime: T=%.1f°C, H=%.0f%%, Battery=%d%%, RSSI=%d dBm",
+                     temperature, humidity, battery, x.get_rssi());
 
             // Сохраняем в глобальные переменные
             id(cozytime_temp) = temperature;
             id(cozytime_humid) = humidity;
+            id(cozytime_battery) = battery;
             id(cozytime_rssi_value) = x.get_rssi();
 
             return;
@@ -105,7 +105,7 @@ sensor:
     unit_of_measurement: "°C"
     device_class: temperature
     accuracy_decimals: 1
-    update_interval: 5s
+    update_interval: 30s
     lambda: |-
       return id(cozytime_temp);
 
@@ -116,7 +116,7 @@ sensor:
     unit_of_measurement: "%"
     device_class: humidity
     accuracy_decimals: 0
-    update_interval: 5s
+    update_interval: 30s
     lambda: |-
       return id(cozytime_humid);
 
@@ -127,9 +127,20 @@ sensor:
     unit_of_measurement: "dBm"
     icon: "mdi:wifi"
     accuracy_decimals: 0
-    update_interval: 5s
+    update_interval: 30s
     lambda: |-
       return id(cozytime_rssi_value);
+
+  # Заряд батареи
+  - platform: template
+    id: cozytime_battery_level
+    name: "CozyTime Battery"
+    unit_of_measurement: "%"
+    device_class: battery
+    accuracy_decimals: 0
+    update_interval: 30s
+    lambda: |-
+      return id(cozytime_battery);
 
   - platform: template
     name: "CozyTime Test Counter"
