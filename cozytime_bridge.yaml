@@ -49,6 +49,9 @@ globals:
   - id: cozytime_battery
     type: int
     initial_value: "0"
+  - id: cozytime_raw_packet
+    type: std::string
+    initial_value: '""'
 
 # ============================================
 # BLE СКАНЕР
@@ -74,6 +77,14 @@ esp32_ble_tracker:
           // Проверяем фиксированный префикс CECD6CCE (первые 4 байта)
           if (data[0] == 0xCE && data[1] == 0xCD && data[2] == 0x6C && data[3] == 0xCE) {
             // Нашли CozyTime!
+
+            // Формируем hex строку всех байтов пакета для логирования
+            char hex_str[60];
+            snprintf(hex_str, sizeof(hex_str),
+                     "%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+                     data[0], data[1], data[2], data[3], data[4], data[5], data[6],
+                     data[7], data[8], data[9], data[10], data[11], data[12], data[13]);
+            id(cozytime_raw_packet) = hex_str;
 
             // Переменные данные
             uint8_t temp_byte = data[5];    // byte[5] для температуры
@@ -159,5 +170,14 @@ sensor:
       static int value = 0;
       value += 1;
       return value;
+
+text_sensor:
+  - platform: template
+    id: cozytime_raw_packet_sensor
+    name: "CozyTime RAW Packet"
+    icon: "mdi:code-brackets"
+    update_interval: 5s
+    lambda: |-
+      return id(cozytime_raw_packet);
 
 captive_portal:
