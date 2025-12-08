@@ -38,7 +38,7 @@ globals:
     type: float
     initial_value: "0.0"
   - id: cozytime_temp_raw
-    type: int
+    type: uint16_t
     initial_value: "0"
   - id: cozytime_humid
     type: float
@@ -86,19 +86,23 @@ esp32_ble_tracker:
                      data[7], data[8], data[9], data[10], data[11], data[12], data[13]);
             id(cozytime_raw_packet) = hex_str;
 
-            // Переменные данные
-            uint8_t temp_byte = data[5];    // byte[5] для температуры
-            uint8_t humid_byte = data[7];   // byte[7] для влажности
-            uint8_t battery_byte = data[8]; // byte[8] для заряда батареи
+            // Собираем 16-битное значение температуры из байтов 5 и 6
+            // Big-endian: byte[6] старший, byte[5] младший
+            uint16_t temp_value = (data[6] << 8) | data[5];
 
-            // Вычисляем значения
-            // Формула: 1 единица byte[5] = 0.2°F
-            float temperature = (temp_byte * 0.2) + 49.7;  // 120*0.2+49.7 = 73.7°F
-            float humidity = humid_byte;           // Прямое значение byte[7]
-            int battery = battery_byte;            // Прямое значение byte[8]
+            uint8_t humid_byte = data[7];    // byte[7] для влажности (прямое значение)
+            uint8_t battery_byte = data[8];  // byte[8] для заряда батареи (прямое значение)
+
+            // Вычисляем температуру по откалиброванной формуле
+            // Формула получена методом линейной регрессии по 13 точкам (33-91°F)
+            // Точность: ±0.15°F макс, средняя ошибка 0.05°F
+            // T(°F) = 0.180123 × temp_value - 40.11
+            float temperature = 0.180123 * temp_value - 40.11;
+            float humidity = humid_byte;     // Прямое значение byte[7]
+            int battery = battery_byte;      // Прямое значение byte[8]
 
             id(cozytime_temp) = temperature;
-            id(cozytime_temp_raw) = temp_byte;
+            id(cozytime_temp_raw) = temp_value;
             id(cozytime_humid) = humidity;
             id(cozytime_battery) = battery;
             id(cozytime_rssi_value) = x.get_rssi();
@@ -152,7 +156,7 @@ sensor:
     lambda: |-
       return id(cozytime_battery);
 
-  # Сырое значение температуры (byte[5])
+  # Сырое значение температуры (16-bit temp_value)
   - platform: template
     id: cozytime_temperature_raw
     name: "CozyTime Temperature RAW"
