@@ -48,7 +48,7 @@ BLE Advertisement Packet
 
 ### Формула температуры
 
-CozyTime использует датчик **SHT40** с кастомной калибровкой:
+CozyTime использует датчик **[SHT40](docs/SHT40%20Datasheet.pdf)** (Sensirion) с кастомной калибровкой:
 
 ```cpp
 // Шаг 1: Собираем 16-битное значение (Big-endian)
@@ -318,6 +318,7 @@ entities:
 - [ESPHome Documentation](https://esphome.io/)
 - [ESP32 BLE Tracker](https://esphome.io/components/esp32_ble_tracker.html)
 - [Home Assistant](https://www.home-assistant.io/)
+- [SHT40 Datasheet](docs/SHT40%20Datasheet.pdf) - Официальная документация датчика Sensirion
 
 ## 📜 Лицензия
 
