@@ -37,6 +37,9 @@ globals:
   - id: cozytime_temp
     type: float
     initial_value: "0.0"
+  - id: cozytime_temp_raw
+    type: int
+    initial_value: "0"
   - id: cozytime_humid
     type: float
     initial_value: "0.0"
@@ -79,11 +82,12 @@ esp32_ble_tracker:
 
             // Вычисляем значения
             // Формула: 1 единица byte[5] = 0.2°F
-            float temperature = (temp_byte * 0.2) + 50.0;  // 120*0.2+50 = 74°F
+            float temperature = (temp_byte * 0.2) + 49.7;  // 120*0.2+49.7 = 73.7°F
             float humidity = humid_byte;           // Прямое значение byte[7]
             int battery = battery_byte;            // Прямое значение byte[8]
 
             id(cozytime_temp) = temperature;
+            id(cozytime_temp_raw) = temp_byte;
             id(cozytime_humid) = humidity;
             id(cozytime_battery) = battery;
             id(cozytime_rssi_value) = x.get_rssi();
@@ -136,6 +140,15 @@ sensor:
     update_interval: 5s
     lambda: |-
       return id(cozytime_battery);
+
+  # Сырое значение температуры (byte[5])
+  - platform: template
+    id: cozytime_temperature_raw
+    name: "CozyTime Temperature RAW"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      return id(cozytime_temp_raw);
 
   - platform: template
     name: "CozyTime Test Counter"
