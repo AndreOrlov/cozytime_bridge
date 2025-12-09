@@ -7,6 +7,7 @@ cozytime_bridge/
 │
 ├── 📄 README.md                      # Основная документация проекта
 ├── 📄 PROTOCOL_ANALYSIS.md           # Детальный анализ BLE протокола
+├── 📄 PROJECT_STRUCTURE.md           # Структура проекта (этот файл)
 ├── 📄 LICENSE                        # MIT License
 ├── 📄 cozytime_bridge.yaml           # Главная конфигурация ESPHome
 ├── 📄 cozytime_parser.h              # C++ парсер (legacy, не используется)
@@ -72,10 +73,16 @@ cozytime_bridge/
 **Планируется:** Миграция на MQTT + Custom Component
 
 **Ключевые компоненты:**
-- ESP32 BLE Tracker
+- ESP32 BLE Tracker (UUID 0x51C9 + prefix check)
 - Lambda парсер BLE пакетов
-- Sensors: Temperature, Humidity, Battery, RSSI
+- Sensors:
+  - Temperature (°F, калиброванная)
+  - Humidity (%)
+  - Battery (%)
+  - RSSI (dBm)
+  - Temperature RAW (temp_value)
 - Text Sensor: Raw packet (hex)
+- Binary Sensor: ESP32 Status (online/offline)
 - Калиброванная формула: `T = 0.179987 × temp_value - 40.02`
 
 ---
@@ -199,6 +206,11 @@ CE CD 6C CE 00 99 01 42 57 01 0C 08 0D 3A,33.6,Улица
 1. Читать: `README.md`
 2. Установка: секция "🚀 Установка"
 3. Решение проблем: секция "🐛 Решение проблем"
+
+**Важно:** Найдите правильный USB порт для вашей ОС:
+- macOS: `/dev/cu.usbserial-*`, `/dev/cu.wchusbserial*`, `/dev/cu.SLAB_USBtoUART`
+- Linux: `/dev/ttyUSB*`, `/dev/ttyACM*`
+- Windows: `COM3`, `COM4`, etc.
 
 ### Для продвинутых:
 1. Читать: `PROTOCOL_ANALYSIS.md`

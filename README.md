@@ -118,14 +118,29 @@ wifi_password: "ваш_wifi_пароль"
 
 ### 3. Первая прошивка через USB
 
+Найдите USB порт:
 ```bash
-esphome upload cozytime_bridge.yaml --device /dev/cu.usbserial-10
+# macOS
+ls /dev/cu.usbserial-* /dev/cu.wchusbserial* /dev/cu.SLAB_USBtoUART
+
+# Linux
+ls /dev/ttyUSB* /dev/ttyACM*
+```
+
+Прошейте ESP32:
+```bash
+esphome run cozytime_bridge.yaml --device /dev/cu.usbserial-XXXXX
+# Замените XXXXX на ваш порт (например: /dev/cu.usbserial-10)
 ```
 
 ### 4. Последующие обновления через WiFi (OTA)
 
 ```bash
-esphome upload cozytime_bridge.yaml
+# Автоматический поиск устройства
+esphome run cozytime_bridge.yaml
+
+# Или указать IP явно
+esphome run cozytime_bridge.yaml --device 192.168.1.XXX
 ```
 
 ## 📊 Сенсоры в Home Assistant
@@ -134,11 +149,13 @@ esphome upload cozytime_bridge.yaml
 
 | Entity ID | Название | Единица | Описание |
 |-----------|----------|---------|----------|
-| `sensor.cozytime_temperature` | CozyTime Temperature | °F | Температура в Фаренгейтах |
-| `sensor.cozytime_temperature_raw` | CozyTime Temperature RAW | - | Сырое значение byte[5] |
-| `sensor.cozytime_humidity` | CozyTime Humidity | % | Влажность |
-| `sensor.cozytime_battery` | CozyTime Battery | % | Заряд батареи |
-| `sensor.cozytime_rssi` | CozyTime RSSI | dBm | Сила сигнала |
+| `sensor.cozytime_bridge_cozytime_temperature` | CozyTime Temperature | °F | Температура в Фаренгейтах |
+| `sensor.cozytime_bridge_cozytime_humidity` | CozyTime Humidity | % | Влажность |
+| `sensor.cozytime_bridge_cozytime_battery` | CozyTime Battery | % | Заряд батареи |
+| `sensor.cozytime_bridge_cozytime_rssi` | CozyTime RSSI | dBm | Сила BLE сигнала |
+| `sensor.cozytime_bridge_cozytime_temperature_raw` | CozyTime Temperature RAW | - | Сырое значение temp_value |
+| `text_sensor.cozytime_bridge_cozytime_raw_packet` | CozyTime RAW Packet | - | Полный BLE пакет в hex |
+| `binary_sensor.cozytime_bridge_status` | CozyTime Bridge Status | - | Статус ESP32 (Online/Offline) |
 
 ## 🔬 Формулы преобразования
 
@@ -235,14 +252,6 @@ esp32_ble_tracker:
    ```
 3. Проверьте логи на наличие устройств с префиксом `CE CD 6C CE`
 
-### Home Assistant показывает неправильную температуру
-
-**Причина:** Автоматическая конвертация единиц измерения
-
-**Решение:**
-- Удалите `device_class: temperature` из конфигурации сенсора
-- В Home Assistant: Settings → Devices → Entity → Edit → Change unit manually
-
 ### OTA обновление не работает
 
 **Причина:** ESP32 не отвечает по сети
@@ -289,12 +298,29 @@ automation:
   - alias: "CozyTime Low Battery Alert"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.cozytime_battery
+        entity_id: sensor.cozytime_bridge_cozytime_battery
         below: 20
     action:
       - service: notify.mobile_app
         data:
-          message: "CozyTime battery is low: {{ states('sensor.cozytime_battery') }}%"
+          message: "CozyTime battery is low: {{ states('sensor.cozytime_bridge_cozytime_battery') }}%"
+```
+
+### Уведомление об отключении ESP32
+
+```yaml
+automation:
+  - alias: "CozyTime Bridge Offline"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.cozytime_bridge_status
+        to: 'off'
+        for: '00:05:00'  # 5 минут офлайн
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "⚠️ CozyTime Bridge Offline"
+          message: "ESP32 bridge is not responding. Check power and WiFi."
 ```
 
 ### Отображение в Lovelace Card
@@ -303,14 +329,16 @@ automation:
 type: entities
 title: CozyTime Sensor
 entities:
-  - entity: sensor.cozytime_temperature
+  - entity: sensor.cozytime_bridge_cozytime_temperature
     name: Temperature
-  - entity: sensor.cozytime_humidity
+  - entity: sensor.cozytime_bridge_cozytime_humidity
     name: Humidity
-  - entity: sensor.cozytime_battery
+  - entity: sensor.cozytime_bridge_cozytime_battery
     name: Battery
-  - entity: sensor.cozytime_rssi
+  - entity: sensor.cozytime_bridge_cozytime_rssi
     name: Signal Strength
+  - entity: binary_sensor.cozytime_bridge_status
+    name: ESP32 Status
 ```
 
 ## 🔗 Полезные ссылки
