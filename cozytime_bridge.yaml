@@ -64,13 +64,24 @@ esp32_ble_tracker:
   on_ble_advertise:
     - lambda: |-
         // Парсер CozyTime
-        // Проверяем ВСЕ manufacturer data на префикс CECD6CCE
+        // Проверяем manufacturer data с UUID 0x51C9 (CozyTime)
 
         for (auto &mfg_data : x.get_manufacturer_datas()) {
+          // ВАЖНО: Сначала проверяем manufacturer UUID
+          if (mfg_data.uuid.get_uuid().len != ESP_UUID_LEN_16) {
+            continue;
+          }
+
+          uint16_t uuid = mfg_data.uuid.get_uuid().uuid.uuid16;
+          if (uuid != 0x51C9) {
+            continue;  // Не CozyTime, пропускаем
+          }
+
           const auto& data = mfg_data.data;
 
           // Проверяем минимальный размер
           if (data.size() < 14) {
+            ESP_LOGW("cozytime", "CozyTime packet too short: %d bytes", data.size());
             continue;
           }
 
