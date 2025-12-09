@@ -118,6 +118,7 @@ sensor:
     name: "CozyTime Temperature"
     unit_of_measurement: "°F"
     device_class: temperature
+    state_class: measurement
     accuracy_decimals: 1
     update_interval: 5s
     lambda: |-
@@ -129,6 +130,7 @@ sensor:
     name: "CozyTime Humidity"
     unit_of_measurement: "%"
     device_class: humidity
+    state_class: measurement
     accuracy_decimals: 0
     update_interval: 5s
     lambda: |-
@@ -174,6 +176,11 @@ sensor:
       static int value = 0;
       value += 1;
       return value;
+
+binary_sensor:
+  - platform: status
+    name: "CozyTime Bridge Status"
+    id: cozytime_status
 
 text_sensor:
   - platform: template
