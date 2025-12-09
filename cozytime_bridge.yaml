@@ -15,7 +15,7 @@ logger:
     cozytime: WARN
     esp32_ble_tracker: WARN
 
-# Enable Home Assistant API (УЖЕ БЕЗ password)
+# Enable Home Assistant API
 api:
   encryption:
     key: !secret api_encryption_key
