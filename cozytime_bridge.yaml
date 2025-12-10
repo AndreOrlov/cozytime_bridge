@@ -6,7 +6,7 @@ esphome:
 esp32:
   board: esp32dev
   framework:
-    type: esp-idf
+    type: arduino
 
 # Enable logging
 logger:
@@ -77,15 +77,18 @@ globals:
   - id: cozytime_raw_packet
     type: std::string
     initial_value: '""'
+  - id: ble_data_received
+    type: bool
+    initial_value: "false"
 
 # ============================================
 # BLE СКАНЕР
 # ============================================
 esp32_ble_tracker:
   scan_parameters:
-    interval: 5s       # Сканировать каждые 5 секунд
-    window: 1.1s       # Длительность окна сканирования
-    active: true
+    interval: 10s       # Сканировать каждые 5 секунд
+    window: 0.8s       # Длительность окна сканирования
+    active: false
   on_ble_advertise:
     - lambda: |-
         // Парсер CozyTime
@@ -142,6 +145,7 @@ esp32_ble_tracker:
             id(cozytime_humid) = humidity;
             id(cozytime_battery) = battery;
             id(cozytime_rssi_value) = x.get_rssi();
+            id(ble_data_received) = true;  // Отметить что данные получены
 
             return;
           }
@@ -156,8 +160,9 @@ sensor:
     device_class: temperature
     state_class: measurement
     accuracy_decimals: 1
-    update_interval: 5s
+    update_interval: 10s
     lambda: |-
+      if (!id(ble_data_received)) return {};
       return id(cozytime_temp);
     on_value:
       then:
@@ -165,6 +170,7 @@ sensor:
             topic: cozytime_bridge/temperature
             payload: !lambda |-
               return to_string(id(cozytime_temp));
+            retain: true
 
   # Влажность
   - platform: template
@@ -174,8 +180,9 @@ sensor:
     device_class: humidity
     state_class: measurement
     accuracy_decimals: 0
-    update_interval: 5s
+    update_interval: 10s
     lambda: |-
+      if (!id(ble_data_received)) return {};
       return id(cozytime_humid);
     on_value:
       then:
@@ -183,6 +190,7 @@ sensor:
             topic: cozytime_bridge/humidity
             payload: !lambda |-
               return to_string(id(cozytime_humid));
+            retain: true
 
   # RSSI (уровень сигнала)
   - platform: template
@@ -191,8 +199,9 @@ sensor:
     unit_of_measurement: "dBm"
     icon: "mdi:wifi"
     accuracy_decimals: 0
-    update_interval: 5s
+    update_interval: 30s
     lambda: |-
+      if (!id(ble_data_received)) return {};
       return id(cozytime_rssi_value);
     on_value:
       then:
@@ -200,6 +209,7 @@ sensor:
             topic: cozytime_bridge/rssi
             payload: !lambda |-
               return to_string(id(cozytime_rssi_value));
+            retain: true
 
   # Заряд батареи
   - platform: template
@@ -208,8 +218,9 @@ sensor:
     unit_of_measurement: "%"
     device_class: battery
     accuracy_decimals: 0
-    update_interval: 5s
+    update_interval: 5min
     lambda: |-
+      if (!id(ble_data_received)) return {};
       return id(cozytime_battery);
     on_value:
       then:
@@ -217,21 +228,24 @@ sensor:
             topic: cozytime_bridge/battery
             payload: !lambda |-
               return to_string(id(cozytime_battery));
+            qos: 1
+            retain: true
 
   # Сырое значение температуры (16-bit temp_value)
   - platform: template
     id: cozytime_temperature_raw
     name: "CozyTime Temperature RAW"
     accuracy_decimals: 0
-    update_interval: 5s
+    update_interval: 10s
     lambda: |-
+      if (!id(ble_data_received)) return {};
       return id(cozytime_temp_raw);
 
   - platform: template
     name: "CozyTime Test Counter"
     id: cozytime_test_counter
     unit_of_measurement: "cnt"
-    update_interval: 5s
+    update_interval: 10s
     lambda: |-
       static int value = 0;
       value += 1;
@@ -247,8 +261,10 @@ text_sensor:
     id: cozytime_raw_packet_sensor
     name: "CozyTime RAW Packet"
     icon: "mdi:code-brackets"
-    update_interval: 5s
+    update_interval: 10s
     lambda: |-
+      if (!id(ble_data_received)) return {};
       return id(cozytime_raw_packet);
 
-captive_portal:
+# Maybe delete this
+# captive_portal:
